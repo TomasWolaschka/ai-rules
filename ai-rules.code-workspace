@@ -1,0 +1,12 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"name": "ai-rules",
+			"path": "ai-rules"
+		}
+	],
+	"settings": {}
+}
