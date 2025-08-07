@@ -23,13 +23,27 @@ import sys
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from pydantic import BaseModel
+# Handle missing dependencies gracefully
+try:
+    from pydantic import BaseModel
+    PYDANTIC_AVAILABLE = True
+except ImportError:
+    PYDANTIC_AVAILABLE = False
+    # Fallback BaseModel for basic validation
+    class BaseModel:
+        def __init__(self, **kwargs):
+            for key, value in kwargs.items():
+                setattr(self, key, value)
 
 
 class ClaudeConfig(BaseModel):
     """Claude Code configuration structure."""
     
-    hooks: Dict[str, List[Dict]] = {}
+    def __init__(self, **kwargs):
+        if PYDANTIC_AVAILABLE:
+            super().__init__(**kwargs)
+        else:
+            self.hooks = kwargs.get('hooks', {})
 
 
 class SetupManager:
@@ -194,13 +208,30 @@ class SetupManager:
             if "hooks" not in config_data:
                 config_data["hooks"] = {}
             
-            # Configure UserPromptSubmit hook with absolute path
-            hook_script_path = str(self.project_root / ".claude" / "hooks" / "rule_injector.py")
+            # Configure hooks with absolute paths
+            session_hook_path = str(self.project_root / ".claude" / "hooks" / "session_rules_injector.py")
+            prompt_hook_path = str(self.project_root / ".claude" / "hooks" / "rule_injector.py")
             
-            # Claude Code hooks structure: hooks.UserPromptSubmit = [hook_config]
+            # Configure SessionStart hook for default rules (startup and clear only)
+            config_data["hooks"]["SessionStart"] = [{
+                "matcher": "(startup|clear)",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": "python3 " + session_hook_path
+                    }
+                ]
+            }]
+            
+            # Configure UserPromptSubmit hook for technology-specific rules
             config_data["hooks"]["UserPromptSubmit"] = [{
-                "command": ["python3", hook_script_path],
-                "matcher": ".*"
+                "matcher": ".*",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": "python3 " + prompt_hook_path
+                    }
+                ]
             }]
             
             # Create config directory if needed
@@ -226,25 +257,38 @@ class SetupManager:
         print("🧪 Validating installation...")
         
         try:
-            # Test hook script execution
-            hook_script = self.project_root / ".claude" / "hooks" / "rule_injector.py"
-            if not hook_script.exists():
-                print("❌ Hook script not found")
+            # Test both hook scripts execution
+            session_hook = self.project_root / ".claude" / "hooks" / "session_rules_injector.py"
+            prompt_hook = self.project_root / ".claude" / "hooks" / "rule_injector.py"
+            
+            if not session_hook.exists():
+                print("❌ Session hook script not found")
+                return False
+            if not prompt_hook.exists():
+                print("❌ Prompt hook script not found")
                 return False
             
-            # Test with dummy environment
-            test_env = os.environ.copy()
-            test_env["CLAUDE_USER_PROMPT"] = "test python script"
-            test_env["CLAUDE_PROJECT_DIR"] = str(self.project_root)
-            
+            # Test SessionStart hook
+            session_test_input = '{"session_id": "test", "hook_event_name": "SessionStart"}'
             result = subprocess.run([
-                sys.executable, str(hook_script)
-            ], env=test_env, capture_output=True, text=True, timeout=10)
+                sys.executable, str(session_hook)
+            ], input=session_test_input, capture_output=True, text=True, timeout=10)
             
             if result.returncode == 0:
-                print("✅ Hook script working correctly")
+                print("✅ SessionStart hook script working correctly")
             else:
-                print(f"⚠️  Hook script test warning: {result.stderr}")
+                print(f"⚠️  SessionStart hook test warning: {result.stderr}")
+            
+            # Test UserPromptSubmit hook
+            prompt_test_input = '{"session_id": "test", "hook_event_name": "UserPromptSubmit", "prompt": "test python script"}'
+            result = subprocess.run([
+                sys.executable, str(prompt_hook)
+            ], input=prompt_test_input, capture_output=True, text=True, timeout=10)
+            
+            if result.returncode == 0:
+                print("✅ UserPromptSubmit hook script working correctly")
+            else:
+                print(f"⚠️  UserPromptSubmit hook test warning: {result.stderr}")
             
             # Test configuration loading
             config_file = self.project_root / "config" / "rules_config.yaml"
@@ -298,12 +342,18 @@ class SetupManager:
         """
         print("🚀 Starting AI Rules Hooks setup...\n")
         
-        # Get user preferences first
+        # Install Python dependencies first (before user preferences to avoid import errors)
+        print("📦 Installing required Python dependencies...")
+        if not self.install_python_dependencies():
+            print("\n❌ Setup failed: Could not install dependencies")
+            return False
+        print()
+        
+        # Get user preferences after dependencies are installed
         self._get_user_preferences()
         
         steps = [
             ("dependencies", self.check_dependencies),
-            ("python_deps", self.install_python_dependencies),
             ("project_structure", self.setup_project_structure),
             ("claude_hooks", self.configure_claude_hooks),
             ("validation", self.validate_installation),

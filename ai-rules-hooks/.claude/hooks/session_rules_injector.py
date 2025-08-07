@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """
-Enhanced Claude Code Hook: Automatic Rule Context Injection
-Injects relevant rule content directly into Claude's context based on user prompt patterns
-and configuration file settings.
+Claude Code SessionStart Hook: Default Rules Injection
+Injects default rule content once per session when Claude Code starts or clears.
 
 Following Python best practices (2024-2025):
 - Type hints for all functions
@@ -14,7 +13,6 @@ Following Python best practices (2024-2025):
 
 import json
 import os
-import re
 import sys
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -44,11 +42,11 @@ class RulesConfig(BaseModel):
     technologies: List[TechnologyPattern] = Field(description="Technology detection patterns and rule mappings")
 
 
-class RuleInjector:
-    """Enhanced rule injection system with configuration support."""
+class SessionRuleInjector:
+    """Session rule injection system for default rules only."""
     
     def __init__(self, config_path: Optional[Path] = None) -> None:
-        """Initialize rule injector with configuration.
+        """Initialize session rule injector with configuration.
         
         Args:
             config_path: Optional path to configuration file. If None, uses default location.
@@ -108,26 +106,6 @@ class RuleInjector:
             print(f"❌ Error: Failed to load configuration from {self.config_path}: {error}", file=sys.stderr)
             sys.exit(1)
     
-    def analyze_prompt_technologies(self, prompt: str) -> List[TechnologyPattern]:
-        """Analyze user prompt to detect relevant technologies.
-        
-        Args:
-            prompt: User prompt to analyze
-            
-        Returns:
-            List of detected technology patterns, sorted by priority
-        """
-        detected_technologies: List[TechnologyPattern] = []
-        
-        for tech_config in self.config.technologies:
-            for pattern in tech_config.patterns:
-                if re.search(pattern, prompt, re.IGNORECASE):
-                    detected_technologies.append(tech_config)
-                    break  # Only add each technology once
-        
-        # Sort by priority (lower number = higher priority)
-        return sorted(detected_technologies, key=lambda tech: tech.priority)
-    
     def load_rule_file(self, rule_filename: str) -> Optional[str]:
         """Load content from a rule file.
         
@@ -149,54 +127,43 @@ class RuleInjector:
             print(f"Error: Failed to load rule file {rule_path}: {error}", file=sys.stderr)
             return None
     
-    def generate_context_injection(self, user_prompt: str) -> str:
-        """Generate context injection content based on user prompt.
+    def generate_session_rules_injection(self) -> str:
+        """Generate session rules injection content (default rules only).
         
-        Args:
-            user_prompt: User's prompt to analyze for technology patterns
-            
         Returns:
             Formatted context injection string for Claude
         """
-        # Detect technologies from prompt
-        detected_techs = self.analyze_prompt_technologies(user_prompt)
-        
-        # Collect rule content
+        # Collect default rule content only
         injected_rules: List[Tuple[str, str]] = []  # (rule_name, content)
         total_size = 0
         
-        # Add technology-specific rules first (higher priority)
-        for tech in detected_techs:
-            rule_content = self.load_rule_file(tech.rule_file)
+        # Add default rules
+        for default_rule in self.config.default_rules:
+            rule_content = self.load_rule_file(default_rule)
             if rule_content and total_size + len(rule_content) < self.config.max_context_size:
-                rule_name = tech.name.upper()
-                injected_rules.append((f"{rule_name} BEST PRACTICES", rule_content))
+                rule_name = default_rule.replace("-", " ").replace(".md", "").upper()
+                injected_rules.append((f"{rule_name} RULES", rule_content))
                 total_size += len(rule_content)
-        
-        # Note: Default rules are now handled by SessionStart hook
-        # This hook only processes technology-specific rules
         
         # Format output if any rules were loaded
         if not injected_rules:
             return ""
         
-        # Generate user-friendly summary for technology-specific rules only
-        tech_names = ', '.join([tech.name.upper() for tech in detected_techs])
+        # Generate user-friendly summary followed by full content for Claude
         rule_names = ', '.join([f"• {rule_name}" for rule_name, _ in injected_rules])
         
         output_parts = [
-            f"🪝 TECH RULES ADDED📋 Detected: {tech_names}",
-            f"📚 Technology Rules: {len(injected_rules)} rule sets, {rule_names}",
+            f"🪝 SESSION RULES LOADED📚 Default rules: {rule_names}",
             "=" * 50,
             "\n" + "=" * 80,
-            "AUTOMATICALLY INJECTED TECHNOLOGY RULES - YOU MUST FOLLOW THESE",
+            "AUTOMATICALLY INJECTED RULES - YOU MUST FOLLOW THESE",
             "=" * 80
         ]
         
         # Add full rules content for Claude
         for rule_name, rule_content in injected_rules:
             output_parts.extend([
-                f"\n## MANDATORY {rule_name} RULES\n",
+                f"\n## MANDATORY {rule_name}\n",
                 rule_content,
                 "\n" + "-" * 40
             ])
@@ -205,8 +172,8 @@ class RuleInjector:
         
         return "\n".join(output_parts)
     
-    def inject_rules(self) -> None:
-        """Main function to inject rules based on user prompt patterns."""
+    def inject_session_rules(self) -> None:
+        """Main function to inject default rules at session start."""
         try:
             # Read JSON input from stdin as per Claude Code hooks specification
             stdin_data = sys.stdin.read().strip()
@@ -214,10 +181,11 @@ class RuleInjector:
                 return  # No input data
             
             hook_input: Dict = json.loads(stdin_data)
-            user_prompt = hook_input.get("prompt", "")
+            hook_event = hook_input.get("hook_event_name", "")
             
-            if not user_prompt:
-                return  # No prompt to analyze
+            # Only process SessionStart events
+            if hook_event != "SessionStart":
+                return
             
         except json.JSONDecodeError as error:
             print(f"Error: Invalid JSON input: {error}", file=sys.stderr)
@@ -226,20 +194,20 @@ class RuleInjector:
             print(f"Error reading hook input: {error}", file=sys.stderr)
             return
         
-        # Generate and output context injection
-        context_injection = self.generate_context_injection(user_prompt)
+        # Generate and output session rules injection
+        context_injection = self.generate_session_rules_injection()
         
         if context_injection:
             print(context_injection)
 
 
 def main() -> None:
-    """Entry point for the rule injector hook."""
+    """Entry point for the session rule injector hook."""
     try:
-        injector = RuleInjector()
-        injector.inject_rules()
+        injector = SessionRuleInjector()
+        injector.inject_session_rules()
     except Exception as error:
-        print(f"Error in rule injector: {error}", file=sys.stderr)
+        print(f"Error in session rule injector: {error}", file=sys.stderr)
 
 
 if __name__ == "__main__":

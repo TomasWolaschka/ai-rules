@@ -27,17 +27,16 @@ A lightweight, KISS-compliant solution for automatic rule injection into Claude 
 ### Installation
 
 ```bash
-# 1. Clone the repository
-git clone <repository-url>
+# 1. Navigate to ai-rules-hooks directory
 cd ai-rules-hooks
 
-# 2. Run interactive setup
-python scripts/setup.py
+# 2. Run automated setup (installs dependencies automatically)
+python3 scripts/setup.py
 ```
 
-The setup script will:
+The setup script will automatically:
+- ✅ Install required Python packages (pyyaml, pydantic)
 - ✅ Check dependencies (Python 3.9+, Claude Code CLI)
-- ✅ Install Python packages (pyyaml, pydantic)
 - ✅ Configure Claude Code hooks in `~/.claude/settings.json`
 - ✅ Create project directory structure
 - ✅ Validate installation with test run

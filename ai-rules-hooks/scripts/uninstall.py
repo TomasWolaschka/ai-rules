@@ -115,39 +115,57 @@ class UninstallManager:
             with self.claude_config_path.open("r", encoding="utf-8") as file:
                 config_data: Dict = json.load(file)
             
-            # Remove our hook if it exists
+            # Remove both SessionStart and UserPromptSubmit hooks
             hooks_section = config_data.get("hooks", {})
-            user_prompt_hooks = hooks_section.get("UserPromptSubmit", [])
+            removed_count = 0
             
-            # Find and remove our hook (look for rule_injector.py in command)
-            original_count = len(user_prompt_hooks)
-            filtered_hooks = []
+            # Remove SessionStart hooks (session_rules_injector.py)
+            session_hooks = hooks_section.get("SessionStart", [])
+            filtered_session_hooks = []
+            
+            for hook in session_hooks:
+                hooks_array = hook.get("hooks", [])
+                for hook_cmd in hooks_array:
+                    command = hook_cmd.get("command", "")
+                    if "session_rules_injector.py" not in command:
+                        filtered_session_hooks.append(hook)
+                        break
+            
+            if filtered_session_hooks != session_hooks:
+                if filtered_session_hooks:
+                    config_data["hooks"]["SessionStart"] = filtered_session_hooks
+                else:
+                    config_data["hooks"].pop("SessionStart", None)
+                removed_count += len(session_hooks) - len(filtered_session_hooks)
+            
+            # Remove UserPromptSubmit hooks (rule_injector.py)
+            user_prompt_hooks = hooks_section.get("UserPromptSubmit", [])
+            filtered_prompt_hooks = []
             
             for hook in user_prompt_hooks:
-                command = hook.get("command", [])
-                if isinstance(command, list) and len(command) >= 2:
-                    if "rule_injector.py" not in command[1]:
-                        filtered_hooks.append(hook)
-                else:
-                    filtered_hooks.append(hook)
+                hooks_array = hook.get("hooks", [])
+                for hook_cmd in hooks_array:
+                    command = hook_cmd.get("command", "")
+                    if "rule_injector.py" not in command:
+                        filtered_prompt_hooks.append(hook)
+                        break
             
-            # Update configuration
-            if filtered_hooks != user_prompt_hooks:
-                if filtered_hooks:
-                    config_data["hooks"]["UserPromptSubmit"] = filtered_hooks
+            if filtered_prompt_hooks != user_prompt_hooks:
+                if filtered_prompt_hooks:
+                    config_data["hooks"]["UserPromptSubmit"] = filtered_prompt_hooks
                 else:
-                    # Remove UserPromptSubmit entirely if empty
                     config_data["hooks"].pop("UserPromptSubmit", None)
-                    
-                    # Remove hooks section if completely empty
-                    if not config_data["hooks"]:
-                        config_data.pop("hooks", None)
-                
-                # Write updated configuration
+                removed_count += len(user_prompt_hooks) - len(filtered_prompt_hooks)
+            
+            # Remove hooks section if completely empty
+            if not config_data.get("hooks"):
+                config_data.pop("hooks", None)
+            
+            # Write updated configuration if changes were made
+            if removed_count > 0:
                 with self.claude_config_path.open("w", encoding="utf-8") as file:
                     json.dump(config_data, file, indent=2, ensure_ascii=False)
                 
-                removed_count = original_count - len(filtered_hooks)
                 print(f"✅ Removed {removed_count} AI Rules hook(s) from Claude configuration")
                 self.removed_items.append(f"Claude Code hooks ({removed_count} hooks)")
             else:
@@ -245,15 +263,25 @@ class UninstallManager:
                 with self.claude_config_path.open("r", encoding="utf-8") as file:
                     config_data = json.load(file)
                 
-                user_prompt_hooks = config_data.get("hooks", {}).get("UserPromptSubmit", [])
-                ai_rules_hooks = [
-                    hook for hook in user_prompt_hooks 
-                    if isinstance(hook.get("command"), list) and 
-                       len(hook["command"]) >= 2 and 
-                       "rule_injector.py" in hook["command"][1]
-                ]
+                hooks_section = config_data.get("hooks", {})
                 
-                if ai_rules_hooks:
+                # Check for remaining SessionStart hooks
+                session_hooks = hooks_section.get("SessionStart", [])
+                remaining_session = any(
+                    "session_rules_injector.py" in hook_cmd.get("command", "") 
+                    for hook in session_hooks 
+                    for hook_cmd in hook.get("hooks", [])
+                )
+                
+                # Check for remaining UserPromptSubmit hooks  
+                user_prompt_hooks = hooks_section.get("UserPromptSubmit", [])
+                remaining_prompt = any(
+                    "rule_injector.py" in hook_cmd.get("command", "")
+                    for hook in user_prompt_hooks
+                    for hook_cmd in hook.get("hooks", [])
+                )
+                
+                if remaining_session or remaining_prompt:
                     print("⚠️  AI Rules hooks still found in Claude configuration")
                     validation_passed = False
                 else:
@@ -296,6 +324,7 @@ class UninstallManager:
         
         print(f"\n📁 Remaining project structure:")
         preserved_items = [
+            ".claude/hooks/session_rules_injector.py",
             ".claude/hooks/rule_injector.py",
             "config/rules_config.yaml", 
             "scripts/",
