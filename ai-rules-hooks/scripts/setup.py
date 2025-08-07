@@ -199,7 +199,7 @@ class SetupManager:
             
             # Claude Code hooks structure: hooks.UserPromptSubmit = [hook_config]
             config_data["hooks"]["UserPromptSubmit"] = [{
-                "command": ["python", hook_script_path],
+                "command": ["python3", hook_script_path],
                 "matcher": ".*"
             }]
             

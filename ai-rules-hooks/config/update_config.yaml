@@ -1,0 +1,41 @@
+# AI Rules Update Configuration
+# Configuration file for the automated rule update system (scripts/update_rules.py)
+
+# Claude CLI command configuration
+claude_command: "claude"  # Command to invoke Claude CLI
+
+# Update scheduling
+update_frequency_months: 6  # How often to update rules (in months)
+
+# Backup configuration  
+backup_old_rules: true  # Whether to backup existing rules before updating
+
+# Template configuration
+prompt_template_file: "config/generation_prompts.md"  # Path to prompt templates
+
+# Technologies to generate/update rules for
+# These correspond to the technology patterns in rules_config.yaml
+technologies:
+  - "python"
+  - "javascript" 
+  - "java"
+  - "react"
+  - "git"
+  - "docker"
+
+# Advanced configuration options (future use)
+advanced:
+  # Claude CLI timeout in seconds
+  claude_timeout: 180
+  
+  # Maximum rule file size in characters
+  max_rule_size: 50000
+  
+  # Whether to include generation metadata in rule files
+  include_metadata: true
+  
+  # Retry attempts for failed generations
+  max_retries: 2
+  
+  # Whether to validate generated content
+  validate_generated_rules: true
