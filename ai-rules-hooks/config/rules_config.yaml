@@ -4,7 +4,11 @@
 # Project settings
 project_name: "ai-rules-hooks"
 rule_base_path: "rules"  # Relative to project root
+cache_base_path: "logs/session_cache"  # Relative to project root
 max_context_size: 50000  # Maximum characters to inject
+
+# Session family caching configuration
+session_family_caching_enabled: true  # Enable session family rule injection caching
 
 # Default rules that are always included (space permitting)
 default_rules:

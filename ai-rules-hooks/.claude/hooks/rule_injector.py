@@ -13,150 +13,54 @@ Following Python best practices (2024-2025):
 """
 
 import json
-import os
 import re
 import sys
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-import yaml
-from pydantic import BaseModel, Field
+from rule_base import BaseRuleInjector, SessionFamilyTracker, TechnologyPattern
 
 
-class TechnologyPattern(BaseModel):
-    """Configuration for technology detection patterns."""
-    
-    name: str = Field(description="Technology name")
-    patterns: List[str] = Field(description="Regex patterns to detect this technology")
-    priority: int = Field(default=1, description="Priority level (1=high, 3=low)")
-    rule_file: str = Field(description="Associated rule file name")
-
-
-class RulesConfig(BaseModel):
-    """Main configuration for rule injection system."""
-    
-    project_name: str = Field(default="ai-rules-hooks")
-    rule_base_path: str = Field(default="rules")
-    max_context_size: int = Field(default=50000, description="Maximum context size in characters")
-    
-    # These fields are now required and must be provided in YAML configuration
-    default_rules: List[str] = Field(description="Default rule files to always include")
-    technologies: List[TechnologyPattern] = Field(description="Technology detection patterns and rule mappings")
-
-
-class RuleInjector:
-    """Enhanced rule injection system with configuration support."""
+class RuleInjector(BaseRuleInjector):
+    """Enhanced rule injection system with configuration support and session family caching."""
     
     def __init__(self, config_path: Optional[Path] = None) -> None:
-        """Initialize rule injector with configuration.
+        """Initialize rule injector with configuration and session tracker.
         
         Args:
             config_path: Optional path to configuration file. If None, uses default location.
         """
-        self.project_root = self._get_project_root()
-        self.config_path = config_path or (self.project_root / "config" / "rules_config.yaml")
-        self.config = self._load_configuration()
-        
-    def _get_project_root(self) -> Path:
-        """Get project root directory from environment or default."""
-        env_path = os.environ.get("CLAUDE_PROJECT_DIR")
-        if env_path:
-            return Path(env_path)
-        
-        # Try to find project root by looking for config directory
-        current_path = Path(__file__).parent
-        while current_path != current_path.parent:
-            if (current_path / "config").exists():
-                return current_path
-            current_path = current_path.parent
-        
-        return Path.cwd()
-    
-    def _load_configuration(self) -> RulesConfig:
-        """Load configuration from YAML file.
-        
-        Returns:
-            Configuration object with user settings from YAML file.
-            
-        Raises:
-            SystemExit: If configuration file is missing or invalid.
-        """
-        if not self.config_path.exists():
-            print(f"❌ Error: Configuration file not found: {self.config_path}", file=sys.stderr)
-            print(f"📋 Please create the configuration file with technology patterns and rules.", file=sys.stderr)
-            print(f"💡 Example: Run 'python scripts/setup.py' to create default configuration.", file=sys.stderr)
-            sys.exit(1)
-        
-        try:
-            with self.config_path.open("r", encoding="utf-8") as config_file:
-                config_data = yaml.safe_load(config_file)
-                
-                if not config_data:
-                    print(f"❌ Error: Configuration file is empty: {self.config_path}", file=sys.stderr)
-                    sys.exit(1)
-                    
-                return RulesConfig(**config_data)
-                
-        except yaml.YAMLError as error:
-            print(f"❌ Error: Invalid YAML syntax in {self.config_path}: {error}", file=sys.stderr)
-            sys.exit(1)
-        except TypeError as error:
-            print(f"❌ Error: Invalid configuration structure in {self.config_path}: {error}", file=sys.stderr)
-            print(f"💡 Hint: Make sure 'technologies' and 'default_rules' fields are present.", file=sys.stderr)
-            sys.exit(1)
-        except Exception as error:
-            print(f"❌ Error: Failed to load configuration from {self.config_path}: {error}", file=sys.stderr)
-            sys.exit(1)
+        super().__init__(config_path)
+        self.session_tracker = SessionFamilyTracker(self.project_root, self.config)
     
     def analyze_prompt_technologies(self, prompt: str) -> List[TechnologyPattern]:
-        """Analyze user prompt to detect relevant technologies.
+        """Analyze user prompt to detect technology patterns.
         
         Args:
-            prompt: User prompt to analyze
+            prompt: User's prompt to analyze for patterns
             
         Returns:
             List of detected technology patterns, sorted by priority
         """
-        detected_technologies: List[TechnologyPattern] = []
+        detected_techs = []
         
         for tech_config in self.config.technologies:
             for pattern in tech_config.patterns:
                 if re.search(pattern, prompt, re.IGNORECASE):
-                    detected_technologies.append(tech_config)
-                    break  # Only add each technology once
+                    detected_techs.append(tech_config)
+                    break  # Only add once per technology
         
-        # Sort by priority (lower number = higher priority)
-        return sorted(detected_technologies, key=lambda tech: tech.priority)
+        # Sort by priority (1=high priority first)
+        return sorted(detected_techs, key=lambda x: x.priority)
     
-    def load_rule_file(self, rule_filename: str) -> Optional[str]:
-        """Load content from a rule file.
-        
-        Args:
-            rule_filename: Name of the rule file to load
-            
-        Returns:
-            Rule file content or None if file not found
-        """
-        rule_path = self.project_root / self.config.rule_base_path / rule_filename
-        
-        try:
-            with rule_path.open("r", encoding="utf-8") as rule_file:
-                return rule_file.read()
-        except FileNotFoundError:
-            print(f"Warning: Rule file not found: {rule_path}", file=sys.stderr)
-            return None
-        except Exception as error:
-            print(f"Error: Failed to load rule file {rule_path}: {error}", file=sys.stderr)
-            return None
-    
-    def generate_context_injection(self, user_prompt: str) -> str:
+    def generate_context_injection(self, user_prompt: str) -> Tuple[str, List[str]]:
         """Generate context injection content based on user prompt.
         
         Args:
             user_prompt: User's prompt to analyze for technology patterns
             
         Returns:
-            Formatted context injection string for Claude
+            Tuple of (formatted context injection string for Claude, list of injected rule names)
         """
         # Detect technologies from prompt
         detected_techs = self.analyze_prompt_technologies(user_prompt)
@@ -165,12 +69,11 @@ class RuleInjector:
         injected_rules: List[Tuple[str, str]] = []  # (rule_name, content)
         total_size = 0
         
-        # Add technology-specific rules first (higher priority)
         for tech in detected_techs:
             rule_content = self.load_rule_file(tech.rule_file)
             if rule_content and total_size + len(rule_content) < self.config.max_context_size:
-                rule_name = tech.name.upper()
-                injected_rules.append((f"{rule_name} BEST PRACTICES", rule_content))
+                rule_name = tech.rule_file.replace("-", " ").replace(".md", "").upper()
+                injected_rules.append((rule_name, rule_content))
                 total_size += len(rule_content)
         
         # Note: Default rules are now handled by SessionStart hook
@@ -178,7 +81,7 @@ class RuleInjector:
         
         # Format output if any rules were loaded
         if not injected_rules:
-            return ""
+            return "", []
         
         # Generate user-friendly summary for technology-specific rules only
         tech_names = ', '.join([tech.name.upper() for tech in detected_techs])
@@ -203,7 +106,9 @@ class RuleInjector:
         
         output_parts.append("=" * 80 + "\n")
         
-        return "\n".join(output_parts)
+        # Return both the injection content and the list of rule names for caching
+        injected_rule_names = [tech.name.lower() for tech in detected_techs]
+        return "\n".join(output_parts), injected_rule_names
     
     def inject_rules(self) -> None:
         """Main function to inject rules based on user prompt patterns."""
@@ -215,9 +120,21 @@ class RuleInjector:
             
             hook_input: Dict = json.loads(stdin_data)
             user_prompt = hook_input.get("prompt", "")
+            session_id = hook_input.get("session_id", "")
+            transcript_path = hook_input.get("transcript_path", "")
             
             if not user_prompt:
                 return  # No prompt to analyze
+            
+            # Session family cache check - early exit optimization
+            if self.config.session_family_caching_enabled and session_id and transcript_path:
+                family_root = self.session_tracker.get_session_family_root(session_id, transcript_path)
+                config_hash = self.get_config_hash()
+                
+                if self.session_tracker.has_family_cache(family_root, config_hash):
+                    # Rules already injected for this session family
+                    print(f"🪝 FAMILY CACHE HIT📚 Session family {family_root[:8]}... rules already active", file=sys.stderr)
+                    return  # Early exit - no injection needed
             
         except json.JSONDecodeError as error:
             print(f"Error: Invalid JSON input: {error}", file=sys.stderr)
@@ -227,19 +144,26 @@ class RuleInjector:
             return
         
         # Generate and output context injection
-        context_injection = self.generate_context_injection(user_prompt)
+        context_injection, injected_rule_names = self.generate_context_injection(user_prompt)
         
         if context_injection:
             print(context_injection)
+            
+            # Create cache entry for this session family
+            if (self.config.session_family_caching_enabled and session_id and 
+                transcript_path and injected_rule_names):
+                try:
+                    family_root = self.session_tracker.get_session_family_root(session_id, transcript_path)
+                    config_hash = self.get_config_hash()
+                    self.session_tracker.create_family_cache(family_root, injected_rule_names, config_hash)
+                except Exception as error:
+                    print(f"Warning: Failed to cache session family: {error}", file=sys.stderr)
 
 
 def main() -> None:
     """Entry point for the rule injector hook."""
-    try:
-        injector = RuleInjector()
-        injector.inject_rules()
-    except Exception as error:
-        print(f"Error in rule injector: {error}", file=sys.stderr)
+    injector = RuleInjector()
+    injector.inject_rules()
 
 
 if __name__ == "__main__":
