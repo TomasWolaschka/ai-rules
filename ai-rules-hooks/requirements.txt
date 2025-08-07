@@ -1,0 +1,6 @@
+# Core dependencies for AI Rules Hooks
+pyyaml>=6.0.1
+pydantic>=2.5.0
+
+# Optional development dependencies
+# Install with: pip install -r requirements.txt -r requirements-dev.txt

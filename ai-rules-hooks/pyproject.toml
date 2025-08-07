@@ -1,0 +1,61 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ai-rules-hooks"
+version = "1.0.0"
+description = "KISS AI Rules Management with Claude Code Hooks"
+authors = [
+    {name = "AI Rules Team", email = "rules@example.com"}
+]
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.9"
+dependencies = [
+    "pyyaml>=6.0",
+    "pydantic>=2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "black>=23.0",
+    "mypy>=1.0",
+    "ruff>=0.1",
+    "pre-commit>=3.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/ai-rules/ai-rules-hooks"
+Repository = "https://github.com/ai-rules/ai-rules-hooks"
+Issues = "https://github.com/ai-rules/ai-rules-hooks/issues"
+
+[project.scripts]
+update-rules = "scripts.update_rules:main"
+setup-hooks = "scripts.setup:main"
+
+[tool.black]
+line-length = 120
+target-version = ["py39", "py310", "py311", "py312", "py313"]
+
+[tool.mypy]
+python_version = "3.9"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+
+[tool.ruff]
+line-length = 120
+select = ["E", "F", "I", "N", "W", "UP"]
+target-version = "py39"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+addopts = [
+    "--strict-markers",
+    "--strict-config",
+    "--verbose",
+]

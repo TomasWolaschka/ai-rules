@@ -1,0 +1,110 @@
+# AI Rules Hooks Configuration
+# Customize this file to control rule injection behavior
+
+# Project settings
+project_name: "ai-rules-hooks"
+rule_base_path: "rules"  # Relative to project root
+max_context_size: 50000  # Maximum characters to inject
+
+# Default rules that are always included (space permitting)
+default_rules:
+  - "solid-best-practices.md"
+  - "bifrost-mcp-code-modification-rules-2025-08.md" 
+  - "vscode-ju-mcp-2025-08.md"
+
+# Technology detection patterns and associated rule files
+# Priority: 1 (high) = injected first, 3 (low) = injected last
+technologies:
+  - name: "python"
+    priority: 1
+    rule_file: "python-best-practices-2024-2025.md"
+    patterns:
+      - '\\.py\b'                    # .py files
+      - '\bpython\b'                 # python keyword
+      - '\bpip\b'                    # pip package manager
+      - '\bconda\b'                  # conda environment
+      - 'pyproject\\.toml'           # Python project file
+      - 'requirements\\.txt'         # Requirements file
+      - 'poetry\\.lock'              # Poetry lock file
+
+  - name: "javascript"
+    priority: 1
+    rule_file: "javascript-best-practices-2024-2025.md"
+    patterns:
+      - '\\.js\b'                    # .js files
+      - '\\.ts\b'                    # .ts files
+      - '\bjavascript\b'             # javascript keyword
+      - '\btypescript\b'             # typescript keyword
+      - '\bnpm\b'                    # npm package manager
+      - '\bnode\b'                   # node.js
+      - 'package\\.json'             # Package file
+      - '\byarn\b'                   # yarn package manager
+      - '\bpnpm\b'                   # pnpm package manager
+
+  - name: "java" 
+    priority: 1
+    rule_file: "java-best-practices-2024-2025.md"
+    patterns:
+      - '\\.java\b'                  # .java files
+      - '\\.kt\b'                    # Kotlin files
+      - '\\.scala\b'                 # Scala files
+      - 'pom\\.xml'                  # Maven project file
+      - 'build\\.gradle'             # Gradle build file
+      - '\bmaven\b'                  # Maven build tool
+      - '\bgradle\b'                 # Gradle build tool
+      - '\bspring\b'                 # Spring framework
+
+  - name: "react"
+    priority: 1  
+    rule_file: "react-best-practices-2024-2025.md"
+    patterns:
+      - '\breact\b'                  # React framework
+      - '\bjsx\b'                    # JSX syntax
+      - '\btsx\b'                    # TSX syntax
+      - 'next\\.js'                  # Next.js framework
+      - '\bgatsby\b'                 # Gatsby framework
+      - 'react-.*'                   # React packages
+
+  - name: "git"
+    priority: 2
+    rule_file: "github-best-practices-2024-2025.md"
+    patterns:
+      - '\\.git\b'                   # Git directory
+      - 'github\\.com'               # GitHub URL
+      - '\bcommit\b'                 # Git commit
+      - '\bbranch\b'                 # Git branch
+      - 'pull request'               # Pull request
+      - '\bworkflow\b'               # GitHub workflow
+      - '\\.github'                  # GitHub directory
+      - '\bci/cd\b'                  # CI/CD references
+
+  - name: "docker"
+    priority: 2
+    rule_file: "docker-best-practices-2024-2025.md" 
+    patterns:
+      - '\bdocker\b'                 # Docker keyword
+      - 'Dockerfile'                 # Dockerfile
+      - 'docker-compose'             # Docker Compose
+      - '\bcontainer\b'              # Container references
+      - '\bkubernetes\b'             # Kubernetes
+      - '\bk8s\b'                    # K8s abbreviation
+
+# Advanced configuration options
+advanced:
+  # Enable debug logging (outputs to stderr)
+  debug_mode: false
+  
+  # Minimum prompt length to trigger rule injection
+  min_prompt_length: 10
+  
+  # Maximum number of technology-specific rules to inject
+  max_tech_rules: 3
+  
+  # Include rule metadata in injection
+  include_metadata: true
+  
+  # Rule content preprocessing
+  preprocessing:
+    remove_empty_lines: true
+    trim_whitespace: true
+    max_line_length: 120
