@@ -2,119 +2,150 @@
 
 A lightweight, KISS-compliant solution for automatic rule injection into Claude Code with configuration and automated rule generation capabilities.
 
-## Features
+## 🚀 What It Does
 
-✅ **Automatic Rule Injection** - Rules automatically injected based on user prompts  
-✅ **Configurable** - Customize technology detection patterns and rule priorities  
+**AI Rules Hooks** automatically injects relevant coding best practices into Claude Code based on technology patterns detected in your prompts. When you ask Claude to help with Python, it automatically gets Python best practices. Ask about React, it gets React guidelines. No manual intervention required.
+
+## ✨ Features
+
+✅ **Smart Technology Detection** - Uses regex patterns to identify technologies in your prompts  
+✅ **Automatic Rule Injection** - Rules injected via Claude Code's hook system  
+✅ **Fully Configurable** - Customize detection patterns, priorities, and rules  
 ✅ **Auto-Generation** - Generate fresh rules using Claude CLI  
+✅ **Complete Lifecycle** - Install, configure, use, update, and uninstall  
 ✅ **KISS Principle** - Simple, lightweight, no complex dependencies  
-✅ **Python Best Practices** - Type hints, PEP 8 compliant, modern Python features  
+✅ **Modern Python** - Type hints, PEP 8 compliant, Python 3.9+ features  
 
-## Quick Start
+## 🎯 Quick Start
 
-### 1. Clone and Setup
+### Prerequisites
+
+- **Python 3.9+** with pip
+- **Claude Code CLI** installed and working (`claude --version`)
+- **Claude Code** (not Claude Desktop - hooks not supported there)
+
+### Installation
 
 ```bash
-# Clone the repository
+# 1. Clone the repository
 git clone <repository-url>
 cd ai-rules-hooks
 
-# Run automated setup
+# 2. Run interactive setup
 python scripts/setup.py
 ```
 
 The setup script will:
-- Install Python dependencies
-- Configure Claude Code hooks
-- Set up project structure
-- Validate the installation
+- ✅ Check dependencies (Python 3.9+, Claude Code CLI)
+- ✅ Install Python packages (pyyaml, pydantic)
+- ✅ Configure Claude Code hooks in `~/.claude/settings.json`
+- ✅ Create project directory structure
+- ✅ Validate installation with test run
 
-### 2. Test the Installation
+### Verification
 
-Use Claude Code with technology keywords:
+Test with technology-specific prompts:
 ```bash
 claude --prompt "Help me write a Python script"
+claude --prompt "Create a React component"
+claude --prompt "Set up a Docker container"
 ```
 
-You should see Python best practices automatically injected into Claude's context.
+You should see relevant best practices automatically injected into Claude's context.
 
-## Manual Installation
+## 🔧 How It Works
 
-If you prefer manual setup:
+### The Magic Behind the Scenes
 
-### 1. Install Dependencies
+1. **User submits prompt** → Claude Code triggers `UserPromptSubmit` hook
+2. **Hook analyzes prompt** → Regex patterns detect technologies (`.py`, `npm`, `React`, etc.)
+3. **Hook loads relevant rules** → Based on detected technologies and configuration
+4. **Hook outputs rules** → Injected into Claude's context automatically
+5. **Claude gets enhanced context** → With relevant best practices for your request
 
-```bash
-pip install -r requirements.txt
-```
+### Technology Detection Examples
 
-### 2. Configure Claude Code Hooks
+| Your Prompt Contains | Detected Technology | Rules Injected |
+|---------------------|-------------------|---------------|
+| `"write a Python script"` | Python | python-best-practices-2025.md |
+| `"create React component"` | React | React development guidelines |
+| `"setup Docker container"` | Docker | Docker best practices |
+| `"git commit message"` | Git | GitHub workflow standards |
+| `package.json` in files | JavaScript | JS/Node.js practices |
 
-Add to your Claude Code configuration file (`~/.claude/claude_desktop_config.json`):
+### Supported Technologies
 
-```json
-{
-  "hooks": {
-    "UserPromptSubmit": [
-      {
-        "matcher": ".*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python /path/to/ai-rules-hooks/.claude/hooks/rule_injector.py"
-          }
-        ]
-      }
-    ]
-  }
-}
-```
+- **Python**: `.py` files, `python`, `pip`, `conda`, `pyproject.toml`, `requirements.txt`
+- **JavaScript/Node**: `.js`/`.ts` files, `npm`, `yarn`, `pnpm`, `package.json`
+- **React**: `React`, `JSX`, `TSX`, `Next.js`, `Gatsby`
+- **Java**: `.java` files, Maven, Gradle, Spring framework
+- **Git/GitHub**: Git repos, GitHub URLs, commit/branch keywords
+- **Docker**: Dockerfile, docker-compose, Docker keywords
 
-### 3. Copy Initial Rules
+## ⚙️ Configuration
 
-```bash
-# Copy existing rule files to rules/ directory
-cp ../ai-rules/*.md rules/
-```
+### Main Configuration (`config/rules_config.yaml`)
 
-## Configuration
-
-### Rules Configuration (`config/rules_config.yaml`)
-
-Customize rule injection behavior:
+The heart of the system - customize rule injection behavior:
 
 ```yaml
-# Maximum context size in characters
-max_context_size: 50000
+# Context limits
+max_context_size: 50000        # Maximum characters injected
+enable_debug: false            # Debug output for troubleshooting
 
-# Default rules always included
+# Always include these rules regardless of technology
 default_rules:
   - "solid-best-practices.md"
   - "bifrost-mcp-code-modification-rules-2025-08.md"
 
-# Technology detection patterns
+# Technology-specific rule mappings
 technologies:
   - name: "python"
-    priority: 1
+    priority: 1                # 1=high, 2=medium, 3=low
     rule_file: "python-best-practices-2024-2025.md"
+    patterns:                  # Regex patterns for detection
+      - '\\.py\b'             # .py files
+      - '\bpython\b'          # word "python"
+      - '\bpip\b'             # pip command
+      - 'requirements\\.txt'   # requirements.txt
+      - 'pyproject\\.toml'     # pyproject.toml
+  
+  - name: "javascript"
+    priority: 1
+    rule_file: "javascript-best-practices-2025.md"
     patterns:
-      - '\\.py\b'
-      - '\bpython\b'
-      - '\bpip\b'
+      - '\\.js\b'
+      - '\\.ts\b'
+      - '\bnpm\b'
+      - 'package\\.json'
+      
+  - name: "react"
+    priority: 2
+    rule_file: "react-best-practices-2025.md"
+    patterns:
+      - '\bReact\b'
+      - '\\.jsx\b'
+      - '\\.tsx\b'
 ```
 
-### Update Configuration (`config/update_config.yaml`)
+### Rule Generation Templates (`config/generation_prompts.md`)
 
-Control rule generation behavior:
+Customize how Claude CLI generates new rules:
 
-```yaml
-claude_command: "claude"
-update_frequency_months: 6
-backup_old_rules: true
-technologies:
-  - python
-  - javascript  
-  - java
+```markdown
+# Rule Generation Prompts
+
+## Default Template
+
+Please generate comprehensive {technology} best practices for {year}.
+
+Create a detailed guide that includes:
+- Modern development standards
+- Security best practices
+- Testing methodologies
+- Performance guidelines
+- Current ecosystem tools
+...
 ```
 
 ## Rule Generation

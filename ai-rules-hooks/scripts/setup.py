@@ -38,27 +38,62 @@ class SetupManager:
     def __init__(self) -> None:
         """Initialize setup manager."""
         self.project_root = Path(__file__).parent.parent
-        self.claude_config_path = self._find_claude_config_path()
+        self.claude_config_path = None
+        self.installation_scope = None
         
-    def _find_claude_config_path(self) -> Optional[Path]:
+    def _get_user_preferences(self) -> None:
+        """Get user preferences for installation."""
+        print("🛠️  AI Rules Hooks Setup Configuration")
+        print("=" * 50)
+        
+        # Ask about Claude version
+        print("\n📋 Which Claude application do you want to configure?")
+        print("1. Claude Code CLI (supports hooks) - Recommended")
+        print("2. Claude Desktop (MCP servers only)")
+        
+        while True:
+            choice = input("\nEnter choice (1-2): ").strip()
+            if choice in ["1", "2"]:
+                break
+            print("Please enter 1 or 2")
+        
+        # Ask about installation scope
+        print("\n📁 Installation scope:")
+        print("1. User-wide (recommended) - Affects your user account")
+        print("2. Local project only - Only for this project directory")
+        
+        while True:
+            scope_choice = input("Enter choice (1-2): ").strip()
+            if scope_choice in ["1", "2"]:
+                break
+            print("Please enter 1 or 2")
+        
+        # Set configuration based on choices
+        if choice == "1":  # Claude Code
+            self.claude_config_path = Path.home() / ".claude" / "settings.json"
+            self.installation_scope = "user" if scope_choice == "1" else "local"
+        else:  # Claude Desktop
+            print("\n❌ Claude Desktop does not support hooks.")
+            print("   Claude Desktop only supports MCP servers.")
+            print("   This tool requires hook functionality.")
+            print("   Please install Claude Code CLI instead:")
+            print("   https://github.com/anthropics/claude-code")
+            sys.exit(1)
+        
+        print(f"\n✅ Configuration:")
+        print(f"   • Target: Claude Code CLI")
+        print(f"   • Scope: {self.installation_scope}")
+        print(f"   • Config file: {self.claude_config_path}")
+        print("")
+    
+    def _find_claude_config_path(self) -> Path:
         """Find Claude Code configuration file location.
         
         Returns:
-            Path to Claude config file or None if not found
+            Path to Claude Code settings.json file
         """
-        possible_paths = [
-            Path.home() / ".claude" / "claude_desktop_config.json",
-            Path.home() / ".config" / "claude" / "claude_desktop_config.json",
-            Path.home() / "Library" / "Application Support" / "Claude" / "claude_desktop_config.json",
-            Path.home() / "AppData" / "Roaming" / "Claude" / "claude_desktop_config.json",
-        ]
-        
-        for path in possible_paths:
-            if path.exists():
-                return path
-        
-        # Return default location if none found
-        return Path.home() / ".claude" / "claude_desktop_config.json"
+        # Claude Code uses ~/.claude/settings.json for hooks configuration
+        return Path.home() / ".claude" / "settings.json"
     
     def check_dependencies(self) -> bool:
         """Check if required dependencies are available.
@@ -148,10 +183,6 @@ class SetupManager:
         """
         print("🪝 Configuring Claude Code hooks...")
         
-        if not self.claude_config_path:
-            print("❌ Could not find Claude Code configuration file")
-            return False
-        
         try:
             # Load existing configuration or create new
             config_data: Dict = {}
@@ -163,25 +194,23 @@ class SetupManager:
             if "hooks" not in config_data:
                 config_data["hooks"] = {}
             
-            # Configure UserPromptSubmit hook
+            # Configure UserPromptSubmit hook with absolute path
             hook_script_path = str(self.project_root / ".claude" / "hooks" / "rule_injector.py")
             
+            # Claude Code hooks structure: hooks.UserPromptSubmit = [hook_config]
             config_data["hooks"]["UserPromptSubmit"] = [{
-                "matcher": ".*",
-                "hooks": [{
-                    "type": "command",
-                    "command": f"python {hook_script_path}"
-                }]
+                "command": ["python", hook_script_path],
+                "matcher": ".*"
             }]
             
             # Create config directory if needed
             self.claude_config_path.parent.mkdir(parents=True, exist_ok=True)
             
-            # Write configuration
+            # Write configuration with proper formatting
             with self.claude_config_path.open("w", encoding="utf-8") as file:
-                json.dump(config_data, file, indent=2)
+                json.dump(config_data, file, indent=2, ensure_ascii=False)
             
-            print(f"✅ Claude hooks configured in: {self.claude_config_path}")
+            print(f"✅ Claude Code hooks configured in: {self.claude_config_path}")
             return True
             
         except Exception as error:
@@ -237,7 +266,7 @@ class SetupManager:
         print("=" * 60)
         print("\n📋 What was configured:")
         print(f"   • Project root: {self.project_root}")
-        print(f"   • Claude config: {self.claude_config_path}")
+        print(f"   • Claude Code settings: {self.claude_config_path}")
         print(f"   • Hook script: {self.project_root / '.claude/hooks/rule_injector.py'}")
         print(f"   • Configuration: {self.project_root / 'config/rules_config.yaml'}")
         
@@ -268,6 +297,9 @@ class SetupManager:
             True if setup successful
         """
         print("🚀 Starting AI Rules Hooks setup...\n")
+        
+        # Get user preferences first
+        self._get_user_preferences()
         
         steps = [
             ("dependencies", self.check_dependencies),
