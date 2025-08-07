@@ -1,0 +1,29 @@
+# Build outputs
+dist/
+build/
+lib/
+
+# Dependencies
+node_modules/
+
+# Environment files
+.env*
+
+# Logs
+logs/
+*.log
+
+# Test coverage
+coverage/
+
+# Application data directories
+archive/
+metadata/
+
+# Config files
+.eslintrc.js
+*.config.js
+
+# Docker files
+Dockerfile*
+docker-compose*.yml
