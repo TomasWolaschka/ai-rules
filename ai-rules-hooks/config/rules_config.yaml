@@ -89,7 +89,7 @@ technologies:
       - '\bkubernetes\b'             # Kubernetes
       - '\bk8s\b'                    # K8s abbreviation
 
-# Advanced configuration options
+# Advanced configuration options (not implemented yet)
 advanced:
   # Enable debug logging (outputs to stderr)
   debug_mode: false
