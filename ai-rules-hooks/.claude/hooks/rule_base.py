@@ -72,43 +72,19 @@ class BaseRuleInjector:
         self.config = self._load_configuration()
     
     def _get_project_root(self) -> Path:
-        """Get project root directory using location-independent absolute paths."""
-        env_path = os.environ.get("CLAUDE_PROJECT_DIR")
-        if env_path:
-            return Path(env_path)
-        
-        # Method 1: Script-based absolute path detection (primary method)
+        # Script-based path detection (universal method)
         # The script is at ai-rules-hooks/.claude/hooks/*.py
         # So go up 3 levels to get to ai-rules-hooks
         script_based_root = Path(__file__).resolve().parent.parent.parent
         config_file = script_based_root / "config" / "rules_config.yaml"
-        print(f"Using script-based project root: {script_based_root}")
+        
         if config_file.exists():
             return script_based_root
         
-        # Method 2: Direct absolute path for this specific installation
-        direct_path = Path("/home/tomaswolaschka/workspace/ai-rules/ai-rules-hooks")
-        print(f"Using direct path: {direct_path}")
-        if direct_path.exists() and (direct_path / "config" / "rules_config.yaml").exists():
-            return direct_path
-        
-        # Method 3: Common absolute locations as fallback
-        fallback_locations = [
-            Path.home() / "workspace" / "ai-rules" / "ai-rules-hooks",
-            Path("/workspace") / "ai-rules" / "ai-rules-hooks",
-        ]
-        
-        for location in fallback_locations:
-            if location.exists() and (location / "config" / "rules_config.yaml").exists():
-                print(f"Using fallback location: {location}")
-                return location
-        
-        # If no valid path found, raise clear error
+        # If config file not found, raise clear error
         raise FileNotFoundError(
             f"Cannot locate ai-rules-hooks project root. "
-            f"Tried script-based path: {script_based_root}, "
-            f"direct path: {direct_path}, "
-            f"and fallback locations: {fallback_locations}"
+            f"Expected config file at: {config_file}"
         )
     
     def _load_configuration(self) -> RulesConfig:

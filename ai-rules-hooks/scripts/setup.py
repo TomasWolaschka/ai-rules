@@ -126,16 +126,16 @@ class SetupManager:
         
         # Check Claude Code CLI
         try:
-            result = subprocess.run(
-                ["claude", "--version"], 
-                capture_output=True, 
-                text=True, 
+            subprocess.run(
+                [self.claude_config_path.parent /  'local' / 'claude', '--version'],
+                capture_output=True,
                 check=True,
                 timeout=10
             )
             print("✅ Claude Code CLI available")
-        except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
+        except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired) as e:
             print("❌ Claude Code CLI not found")
+            print(f"   Error: {e}")
             print("   Please install Claude Code: https://github.com/anthropics/claude-code")
             return False
         
