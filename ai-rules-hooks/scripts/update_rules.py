@@ -25,14 +25,14 @@ from pydantic import BaseModel, Field
 
 class UpdateConfig(BaseModel):
     """Configuration for rule updating process."""
-    
-    claude_command: str = Field(default="claude")
+    home: str = Field(default=str(Path.home()))
+    claude_command: str = Field(default=str(Path.home()) + "/.claude/local/claude")
     update_frequency_months: int = Field(default=6)
     backup_old_rules: bool = Field(default=True)
     prompt_template_file: str = Field(default="config/generation_prompts.md")
     
     technologies: List[str] = Field(
-        default=["python", "javascript", "java", "react", "git", "docker"]
+        default=["python", "javascript", "java", "react", "git", "docker", "typescript"]
     )
 
 
@@ -79,16 +79,16 @@ class RuleUpdater:
     def _check_claude_available(self) -> bool:
         """Check if Claude CLI is available and working."""
         try:
-            result = subprocess.run(
+            subprocess.run(
                 [self.config.claude_command, "--version"],
-                capture_output=True,
-                text=True,
-                check=True,
                 timeout=10
             )
             return True
-        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError):
-            return False
+        except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired) as e:
+            print("❌ Claude Code CLI not found")
+            print(f"   Error: {e}")
+            print("   Please install Claude Code: https://github.com/anthropics/claude-code")
+            return False    
     
     def _load_prompt_template(self, technology: str) -> str:
         """Load prompt template for generating rules.
@@ -127,7 +127,7 @@ class RuleUpdater:
         """
         current_year = datetime.now().year
         
-        return f"""Please generate comprehensive {technology} best practices for {current_year}.
+        return f"""Default Please generate comprehensive {technology} best practices for {current_year}.
 
 Create a detailed guide that includes:
 
@@ -168,14 +168,17 @@ standards and emerging trends in the {technology} ecosystem.
 The output should be production-ready content that developers can immediately 
 apply to improve their {technology} development practices."""
     
-    def _backup_existing_rule(self, rule_file: Path) -> None:
+    def _backup_existing_rule(self, rule_file: Path) -> Optional[Path]:
         """Create backup of existing rule file.
         
         Args:
             rule_file: Path to rule file to backup
+            
+        Returns:
+            Path to backup file if successful, None otherwise
         """
         if not rule_file.exists():
-            return
+            return None
             
         # Create backup directory if needed
         self.backup_dir.mkdir(parents=True, exist_ok=True)
@@ -188,8 +191,10 @@ apply to improve their {technology} development practices."""
         try:
             rule_file.rename(backup_path)
             print(f"✅ Backed up existing rule to: {backup_path}")
+            return backup_path
         except Exception as error:
             print(f"⚠️  Warning: Failed to backup {rule_file}: {error}", file=sys.stderr)
+            return None
     
     def _generate_rule_via_claude(self, technology: str) -> Optional[str]:
         """Generate rule content by calling Claude CLI.
@@ -201,12 +206,12 @@ apply to improve their {technology} development practices."""
             Generated rule content or None if failed
         """
         prompt = self._load_prompt_template(technology)
-        
+        print(prompt)
         try:
             print(f"🤖 Generating {technology} best practices via Claude CLI...")
             
             result = subprocess.run(
-                [self.config.claude_command, "--prompt", prompt],
+                [self.config.claude_command, "-p", prompt],
                 capture_output=True,
                 text=True,
                 check=True,
@@ -240,18 +245,26 @@ apply to improve their {technology} development practices."""
         """
         rule_filename = f"{technology}-best-practices-{datetime.now().year}.md"
         rule_path = self.rules_dir / rule_filename
+        backup_path = None
         
         print(f"\n📝 Updating {technology} best practices...")
+        
+        # Backup existing rule if configured
+        if self.config.backup_old_rules:
+            backup_path = self._backup_existing_rule(rule_path)
         
         # Generate new content via Claude
         new_content = self._generate_rule_via_claude(technology)
         if not new_content:
             print(f"❌ Failed to generate content for {technology}")
+            # Restore backup if generation failed
+            if backup_path and backup_path.exists():
+                try:
+                    backup_path.rename(rule_path)
+                    print(f"🔄 Restored original rule from backup")
+                except Exception as error:
+                    print(f"⚠️  Warning: Failed to restore backup {backup_path}: {error}", file=sys.stderr)
             return False
-        
-        # Backup existing rule if configured
-        if self.config.backup_old_rules:
-            self._backup_existing_rule(rule_path)
         
         # Write new rule file
         try:
@@ -267,6 +280,13 @@ apply to improve their {technology} development practices."""
             
         except Exception as error:
             print(f"❌ Failed to write rule file for {technology}: {error}", file=sys.stderr)
+            # Restore backup if file write failed
+            if backup_path and backup_path.exists():
+                try:
+                    backup_path.rename(rule_path)
+                    print(f"🔄 Restored original rule from backup")
+                except Exception as restore_error:
+                    print(f"⚠️  Warning: Failed to restore backup {backup_path}: {restore_error}", file=sys.stderr)
             return False
     
     def update_all_technologies(self) -> Dict[str, bool]:

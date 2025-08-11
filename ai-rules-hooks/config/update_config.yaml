@@ -2,7 +2,7 @@
 # Configuration file for the automated rule update system (scripts/update_rules.py)
 
 # Claude CLI command configuration
-claude_command: "claude"  # Command to invoke Claude CLI
+# claude_command: Path.home() / ".claude" / "local" / "claude"  # Command to invoke Claude CLI
 
 # Update scheduling
 update_frequency_months: 6  # How often to update rules (in months)
@@ -22,6 +22,7 @@ technologies:
   - "react"
   - "git"
   - "docker"
+  - "typescript"
 
 # Advanced configuration options (future use)
 advanced:
